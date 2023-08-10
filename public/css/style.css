@@ -1,0 +1,36 @@
+body {
+    position:  relative;        
+}
+
+.chat {
+    position:  absolute;        
+    background-color: #ffffff;     
+    padding:  10px;             
+    left:  1800px;               
+    top: 800px;                  
+}
+/* .red_rect {
+    position:  absolute;        
+    background-color: #ffffff;     
+    padding:  10px;            
+    left:  900px;                
+    top: 500px;                  
+} */
+
+.send_bouuon{
+    position:  absolute;        
+    background-color: #ccc;     
+    width: 80px;
+    left:  1700px;                
+    top: 800px;                  
+}
+.ul{
+    position:  absolute;        
+    top: 400px;
+    
+}
+.ul li{
+    list-style: none;
+    color: #ffffff;
+
+}

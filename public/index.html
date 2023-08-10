@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <div id="fast_screen">
+        <h1>FPSかもしれないゲーム('ω')ノ</h1>
+        <form action="">
+            <input type="text" id="text">
+            <input id="check_in" type="submit" value="チェックイン">
+        </form>
+    </div>
+    <ul class="ul">
+    </ul>
+    <button type="button" class="chat">チャット</button>
+    <!--ライブラリを読み込み(three.jsとsocket.io)-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.9.1/math.js"></script>
+    <script src="https://unpkg.com/three@0.146.0/build/three.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module">
+        //最初にいろんなものを定義しておく変数
+        const socket = io();
+        //import * as THREE from "./build/three.module.js";
+        import { FontLoader } from "./loaders/FontLoader.js";
+        import { TextGeometry } from "./geometries/TextGeometry.js";
+        let scene, camera, renderer, floorGeometry, floorMaterial, floorMesh, BoxGeometry, BoxMaterial, BoxMesh, input, texture, texture2, light, ambient, con
+        let chat = document.querySelector(".chat")
+        let check_in = document.querySelector("#check_in")
+        const fontLoader = new FontLoader();
+        //フォントを定義
+        let font;
+
+        //fontLoaderを読み込んでいるよ(コールバック関数)
+        fontLoader.load('./fonts/helvetiker_bold.typeface.json', function (_font) {
+            font = _font;
+        });
+
+        //checkボタンおしたら実行される関数
+        check_in.addEventListener('click', function (e) {
+            e.preventDefault();
+            renderer.domElement.style.display = 'block';
+            let text = document.querySelector('#text')
+            document.querySelector('#fast_screen').remove();
+            //サーバーにcheckしたと報告するよ
+            socket.emit("check", text.value);
+        })
+        //サーバーからcheckがリターンされるよ
+        socket.on('receive_check', (players, check) => {
+            boxcreate_and_move(players, check);
+            tick();
+        })
+        //読み込む関数(checkする前に読み込んでおく(canvasとかつくってるけどレンダラーに接続してないから映らないよ!!))
+        function init() {
+            //シーン読み込み
+            scene = new THREE.Scene();
+            //カメラ読み込み
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 100, 1100);
+            //レンダラー読み込み
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            renderer.domElement.style.display = 'none';
+            // con.fillStyle = "red";
+            // con.fillrect(50,50,50,50)
+            // let p = renderer.domElement.appendChild(document.createElement("p"))
+            // p.innerHTML = "なってる"
+
+            // 画像を読み込む
+            //const loader = new THREE.TextureLoader();
+            //const texture = loader.load('/img/floor.jpg');
+            texture = new THREE.TextureLoader().load('/img/floor.jpg');
+            texture2 = new THREE.TextureLoader().load('/img/UFO.png');
+            //ユーザーの(box100で作成)
+            BoxGeometry = new THREE.BoxGeometry(100, 100, 100);
+            BoxMaterial = new THREE.MeshLambertMaterial({ map: texture2 });
+            //床を作成しているよ
+            floorGeometry = new THREE.PlaneGeometry(1000, 1000);
+            floorMaterial = new THREE.MeshLambertMaterial({ map: texture });
+            floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
+            //90度回転しているよ
+            floorMesh.rotation.x = -Math.PI / 2;
+            //横に500奥行500移動しているよ(ufoが一番端っこに表示されるよ)
+            floorMesh.position.set(500, 0, 500)
+            //ライト読み込み(読み込まないと映らないからね)
+            light = new THREE.DirectionalLight(0xffffff);
+            light.intensity = 2; // 光の強さを倍に
+            light.position.set(1, 1, 1); // ライトの方向
+            ambient = new THREE.AmbientLight(0x808080);
+            //シーンに追加しているよ
+            scene.add(light);
+            scene.add(ambient);
+            scene.add(floorMesh)
+        }
+        //実行はしているよ(まだ映らないけどね)
+        init();
+
+        //メッシュを入れる配列
+        const Meshes = {};
+        //boxを作ったり移動したりする関数
+        function boxcreate_and_move(players, check) {
+            Object.values(players).forEach((player) => {
+                //配列をBoxMesh(UFOのメッシュ)を変数BoxMeshに入れている
+                let BoxMesh = Meshes[player.id];
+                //↓最初は空(正確にはundefined)だからboxが作成される
+                if (!BoxMesh) {
+                    BoxMesh = new THREE.Mesh(BoxGeometry, BoxMaterial);
+                    //配列に記録しておく
+                    Meshes[player.id] = BoxMesh;
+                    //boxをシーンに追加
+                    scene.add(BoxMesh)
+                }
+
+                let textMesh = Meshes[player.textid];
+                if (!textMesh) {
+                    //テキストジオメトリーを作成
+                    const textGeometry = new TextGeometry(check, {
+                        font: font,
+                        size: 10,
+                        height: 10,
+                        //curveSegments: 5,
+                        //bevelEnabled: true,
+                        //bevelThickness: 0.03,
+                        //bevelSize: 0.02,
+                        //bevelOffset: 0,
+                        //bevelSegments: 4,
+                    });
+                    textGeometry.center();
+                    const textMaterial = new THREE.MeshBasicMaterial({ color: 'white', side: THREE.DoubleSide });
+                    textMesh = new THREE.Mesh(textGeometry, textMaterial);
+                    //配列に記録しておく
+                    Meshes[player.textid] = textMesh;
+                    scene.add(textMesh);
+                }
+
+                //50,50,50が左端っこになるかな!!
+                BoxMesh.position.set(player.x + 50, 50, player.y + 50)
+                textMesh.position.set(player.x + 50, 110, player.y + 50)
+                textMesh.rotation.y = -Math.PI / 2;
+            });
+
+        }
+
+
+        ///アニメーションしてるよ(checkボタンおしたらよばれる関数)
+        function tick() {
+            //ここでレンダラー接続(これで映るよ)
+            renderer.render(scene, camera);
+            //tick関数を繰り返してるよ
+            requestAnimationFrame(tick);
+        }
+
+
+        //クリックしたらchat画面が開くよ
+        chat.addEventListener('click', function () {
+            this.remove();
+            input = document.body.appendChild(document.createElement("input"));
+            input.className = "chat";
+            input.style.left = '550px';
+            let button = document.body.appendChild(document.createElement("button"));
+            button.className = "send_bouuon";
+            button.innerText = '送信'
+
+        })
+        //送るときにif文の下が実行される関数(イベント自体はどこかクリックされたら実行されるけどね(笑))
+        document.addEventListener('click', function (event) {
+            //送るときに実行↓
+            if (event.target.className == 'send_bouuon') {
+                console.log("aa")
+                socket.emit("send_chat", input.value);
+            }
+        })
+        //chatのサーバーからの折り返しの返事が来たときの関数
+        socket.on('receive_chat', (receivechat) => {
+            let ul = document.querySelector('.ul')
+            let li = ul.appendChild(document.createElement("li"));
+            //7つたまったら最初のリストは削除(キューみたいな(笑))
+            if (ul.childElementCount === 7) {
+                ul.firstElementChild.remove();
+            }
+            li.innerHTML = receivechat;
+        })
+        //矢印キーなど押したらカメラが移動するよ
+        // window.onkeydown = function (e) {
+        //     let code = e.keyCode
+        //     console.log(code)
+        //     if (code == 39) {
+        //         camera.position.x += 1
+        //     }
+        //     if (code == 37) {
+        //         camera.position.x -= 1
+        //     }
+        //     if (code == 38) {
+        //         camera.position.y -= 1
+        //     }
+        //     if (code == 40) {
+        //         camera.position.y += 1
+        //     }
+        //     //回転する
+        //     if (code == 13) {
+        //         camera.rotation.set(0, -29 * Math.PI / 36, 0);
+        //     }
+        //     if (code == 65) {
+        //         camera.position.z -= 1
+        //         console.log(camera.position.z)
+        //     }
+        //     if (code == 32) {
+        //         camera.position.x *= Math.cos(Math.PI / 4)
+        //         camera.position.z *= Math.sin(Math.PI / 4)
+        //     }
+
+        //     renderer.render(scene, camera);
+        //     //camera.lookAt(new THREE.Vector3(0, 0, 0))
+
+        // }
+
+        //各キーを押したら実行されるよ(移動や一人称画面など)
+        window.onkeydown = function (e) {
+            let code = e.keyCode
+            if (code == 39) {
+                socket.emit('right')
+            }
+            if (code == 37) {
+                socket.emit('left')
+            }
+            if (code == 38) {
+                socket.emit('top')
+            }
+            if (code == 40) {
+                socket.emit('bottom')
+            }
+            if (code == 13) {
+                camera.position.y += 100;
+                camera.rotation.set(0, -Math.PI / 4, 0);
+            }
+            if (code == 65) {
+                camera.position.z -= 1
+                console.log(camera.position.z)
+            }
+            //スペースキー押したら一人称画面だよ!見やすくなるかもね!
+            if (code == 32) {
+                socket.emit('camerafirstperson')
+            }
+
+            //renderer.render(scene, camera);
+            //camera.lookAt(new THREE.Vector3(0, 0, 0))
+        }
+
+        //ufoが移動するよ
+        socket.on('to_move', (players) => {
+            boxcreate_and_move(players);
+        })
+        //カメラ一人称視点(同期はさせてないよ!!)
+        socket.on('camerafirstperson_receive', (XX, YY) => {
+            camera.position.set(XX + 50 - 400, 100, YY)
+            camera.rotation.set(0, -Math.PI / 2, 0);
+
+        })
+
+
+
+        //console.log(round(e, 3))
+
+        //numerator   分子
+        //denominator 分母
+
+        // const array = [[2, 0], [-1, 3]]               // Array
+        // const matrix = math.matrix([[7, 1], [-2, 3]]) // Matrix
+        // console.log(math.multiply(array, matrix) )
+        // const c = [[35, 35], [6, 5]]
+        // const d = [[1, 1], [5, 8]]
+                  // returns Array [[7, -6, 17], [13, -4, 33]]
+        // console.log(math.multiply(c, d))
+
+
+
+    </script>
+
+
+
+
+</body>
+
+</html>
